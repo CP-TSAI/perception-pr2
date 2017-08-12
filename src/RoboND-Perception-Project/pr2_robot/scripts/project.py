@@ -193,7 +193,42 @@ def pcl_callback(pcl_msg):
   # Create a cloud with each cluster of points having the same color
   clusters_cloud = pcl.PointCloud_PointXYZRGB()
   clusters_cloud.from_list(colored_points)
+  
+  # ---------------------------
+  # CLASSIFY THE CLUSTERS 
+  # ---------------------------
 
+  detected_objects_labels = []
+  detected_objects = []
+
+  for i, indices in enumerate(clusters):
+    
+    cluster = objects_cloud.extract(indices)
+    
+    # Convert point cloud cluster to ros message
+    cluster_msg = pcl_to_ros(cluster)
+    
+    # Get features
+    color_hist = compute_color_histograms(cluster_msg, using_hsv = True)
+    normal_hist = compute_normal_histograms(get_normals(cluster_msg))
+    features = np.concatenate((color_hist, normal_hist))    
+    
+    # Predict and get label
+    prediction = classifier.predict(scaler.transform(features.reshape(1, -1)))
+    label = encoder.inverse_transform(prediction)[0]
+    detected_objects_labels.append(label)
+
+    # Get label position near object and publish in RViz
+    label_position = list(colorless_cloud[indices[0]])
+    label_position[2] += 0.3
+    object_markers_publisher.publish(make_label(label, label_position, i))
+
+    # Add detection to list of detected objects
+    detectedObject = DetectedObject()
+    detectedObject.label = label
+    detectedObject.cloud = pcl_to_ros(clusters_cloud)
+    detected_objects.append(detectedObject)
+ 
   # Convert pcl data to ros messages
   objects_msg = pcl_to_ros(objects_cloud)
   table_msg = pcl_to_ros(table_cloud)
@@ -204,12 +239,17 @@ def pcl_callback(pcl_msg):
   table_publisher.publish(table_msg)
   clusters_publisher.publish(clusters_msg)
 
+  # Publish the list of detected objects
+  rospy.loginfo('Detected {} objects: {}'.format(len(detected_objects_labels), detected_objects_labels))
+  detected_objects_publisher.publish(detected_objects)
+
 '''
   try:
     pr2_mover(detected_objects_list)
   except rospy.ROSInterruptException:
     pass
 '''
+
 
 '''
 # function to load parameters and request PickPlace service
@@ -263,7 +303,16 @@ if __name__ == '__main__':
   objects_publisher = rospy.Publisher("/pcl_objects", PointCloud2, queue_size = 1)
   table_publisher = rospy.Publisher("/pcl_table", PointCloud2, queue_size = 1)
   clusters_publisher = rospy.Publisher("/pcl_cluster", PointCloud2, queue_size = 1)
+  object_markers_publisher = rospy.Publisher("/object_markers", Marker, queue_size = 1)
+  detected_objects_publisher = rospy.Publisher("/detected_objects", DetectedObjectsArray, queue_size = 1)
   
+  # Load Model From disk
+  model = pickle.load(open('model.sav', 'rb'))
+  classifier = model['classifier']
+  encoder = LabelEncoder()
+  encoder.classes_ = model['classes']
+  scaler = model['scaler']
+
   # Initialize color_list
   get_color_list.color_list = []
 
