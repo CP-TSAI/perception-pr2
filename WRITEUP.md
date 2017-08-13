@@ -1,6 +1,6 @@
 # WRITEUP
 
-# Capturing features and Training models for object detection
+# Capturing features and Training Models for Object Detection
 - There are eight types of objects: biscuits, soap, soap2, book, glue, sticky notes, snacks, and eraser. 
 - To train the model, 
 [**THIS SCRIPT**](https://github.com/mithi/perception-pr2/blob/master/src/sensor_stick/scripts/capture_features.py)
@@ -101,10 +101,10 @@ plane model which I still consider as part of the model.
 - [Features Script](https://github.com/mithi/perception-pr2/blob/master/src/sensor_stick/src/sensor_stick/features.py)
 
 # Results
-[result](https://github.com/mithi/perception-pr2/blob/master/img/label_test3.png)
-[result 1](https://github.com/mithi/perception-pr2/blob/master/img/test1.png)
-[result 2](https://github.com/mithi/perception-pr2/blob/master/img/test2.png)
-[result 3](https://github.com/mithi/perception-pr2/blob/master/img/test3.png)
+![result](https://github.com/mithi/perception-pr2/blob/master/img/label_test3.png)
+![result 1](https://github.com/mithi/perception-pr2/blob/master/img/test1.png)
+![result 2](https://github.com/mithi/perception-pr2/blob/master/img/test2.png)
+![result 3](https://github.com/mithi/perception-pr2/blob/master/img/test3.png)
 - More screenshots can be found in the `/img` folder
 
 # Reflections and Future Work
