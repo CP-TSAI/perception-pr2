@@ -25,6 +25,10 @@ import yaml
 
 import pcl
 
+CURRENT_TEST_SCENE = 2
+MODEL_PATH = '/home/mithi/catkin_ws/src/RoboND-Perception-Project/pr2_robot/scripts/model.sav'
+OUTPUT_FILENAME = "output_" + str(CURRENT_TEST_SCENE) + '.yaml'
+
 
 ''' Gets surface normals '''
 def get_normals(cloud):
@@ -45,10 +49,13 @@ def make_yaml_dict(test_scene_num, arm_name, object_name, pick_pose, place_pose)
 
 ''' Outputs dictionary to yaml file '''
 def send_to_yaml(yaml_filename, dict_list):
-  data_dict = {"object_list": dict_list}
-  with open(yaml_filename, 'w') as outfile:
-    yaml.dump(data_dict, outfile, default_flow_style=False)
 
+  data_dict = {"object_list": dict_list}
+
+  with open(yaml_filename, 'w') as outfile:
+    yaml.dump(data_dict, outfile, default_flow_style = False)
+
+  print "OUTPUT YAML CREATED:", yaml_filename
 
 ''' Returns Downsampled version of a point cloud
     The bigger the leaf size the less information retained '''
@@ -156,8 +163,7 @@ def get_colored_clusters(clusters, cloud):
 
   colored_points = []
 
-  # Assign a color for each point
-  # Points with the same color belong to the same cluster
+  # Assign a color for each point, points with the same color belong to the same cluster
   for cluster_id, cluster in enumerate(clusters):
     for c, i in enumerate(cluster):
       x, y, z = cloud[i][0], cloud[i][1], cloud[i][2]
@@ -165,6 +171,110 @@ def get_colored_clusters(clusters, cloud):
       colored_points.append([x, y, z, color])
   
   return colored_points
+
+
+''' Predict what object this cluster of points pertain to '''
+def classify_cluster(cluster_msg):
+
+  # Get features
+  color_hist = compute_color_histograms(cluster_msg, using_hsv = True)
+  normal_hist = compute_normal_histograms(get_normals(cluster_msg))
+  features = np.concatenate((color_hist, normal_hist))    
+    
+  # Predict and get label
+  prediction = classifier.predict(scaler.transform(features.reshape(1, -1)))
+  label = encoder.inverse_transform(prediction)[0]
+
+  return label
+
+
+''' Make a DetectedObject which is a msg ROS can publish'''
+def make_detectedObject(label, cluster_msg):
+
+  detectedObject = DetectedObject()
+  detectedObject.label = label
+  detectedObject.cloud = cluster_msg
+
+  return detectedObject
+  
+''' This class holds information about the object in the scene and what to do with it '''
+class PickPlaceObject:
+
+  def __init__(self, object):
+    
+    # These are ros msgs
+    self.name = String()
+    self.arm = String()
+    self.pick_pose = Pose()
+    self.place_pose =  Pose()
+    
+    self.group = None 
+    self.yaml_dict = None
+
+    self.name.data = str(object.label)
+    
+    # Assign pick_pose to centroid of cluster
+    points = ros_to_pcl(object.cloud).to_array()
+    x, y, z = np.mean(points, axis = 0)[:3]
+    self.pick_pose.position.x = np.asscalar(x) 
+    self.pick_pose.position.y = np.asscalar(y)
+    self.pick_pose.position.z = np.asscalar(z)
+
+    print "Creating object:", self.name.data
+    print "in position:"
+    print self.pick_pose.position
+    print "Not yet determined: arm, place_pose, group"
+
+  def set_place(self, pick_list, dropbox_list):
+    
+    '''
+    IMPORTANT: 
+      The YAML file where pick_list and dropbox_list is retrieved should 
+      have the following format respectively:
+
+      object_list:
+      - name: biscuits
+        group: green
+      - name: soap
+        group: green
+      - name: soap2
+        group: red
+
+      dropbox:
+      - name: left
+        group: red
+        position: [0,0.71,0.605]
+      - name: right
+        group: green
+        position: [0,-0.71,0.605]
+    '''
+
+    print "Setting group and place position for object:", self.name.data
+
+    for object in pick_list:
+      if object['name'] == self.name.data:
+        self.group = object['group']
+        break
+
+    print "group: ", self.group
+
+    for box in dropbox_list:
+      if box['group'] == self.group:
+        x, y, z = box['position']
+        print "should be placed at position:", x, y, z
+        self.place_pose.position.x = np.float(x) 
+        self.place_pose.position.y = np.float(y)
+        self.place_pose.position.z = np.float(z)        
+        self.arm.data = box['name']
+        break
+
+    print "arm:", self.arm.data
+    print "To be placed at:"
+    print self.place_pose.position
+
+  def make_yaml_dict(self, test_scene):
+    self.yaml_dict = make_yaml_dict(test_scene, self.arm, self.name, self.pick_pose, self.place_pose)
+    print "yaml dictionary created"
 
 
 ''' Callback function for your Point Cloud Subscriber '''
@@ -182,7 +292,7 @@ def pcl_callback(pcl_msg):
   # Get groups of indices for each cluster of points
   # Each group of points belongs to the same object
   # This is effectively a list of lists, with each list containing indices of the cloud
-  clusters = get_clusters(colorless_cloud, tolerance = 0.01, min_size = 100, max_size = 15000)
+  clusters = get_clusters(colorless_cloud, tolerance = 0.01, min_size = 200, max_size = 15000)
 
   print "Number of clusters:", len(clusters)
  
@@ -204,30 +314,19 @@ def pcl_callback(pcl_msg):
   for i, indices in enumerate(clusters):
     
     cluster = objects_cloud.extract(indices)
-    
-    # Convert point cloud cluster to ros message
     cluster_msg = pcl_to_ros(cluster)
     
-    # Get features
-    color_hist = compute_color_histograms(cluster_msg, using_hsv = True)
-    normal_hist = compute_normal_histograms(get_normals(cluster_msg))
-    features = np.concatenate((color_hist, normal_hist))    
-    
-    # Predict and get label
-    prediction = classifier.predict(scaler.transform(features.reshape(1, -1)))
-    label = encoder.inverse_transform(prediction)[0]
+    # Predict what object this cluster of points pertain to
+    label = classify_cluster(cluster_msg)
     detected_objects_labels.append(label)
 
-    # Get label position near object and publish in RViz
+    # Get label position near object and publish this
     label_position = list(colorless_cloud[indices[0]])
     label_position[2] += 0.3
     object_markers_publisher.publish(make_label(label, label_position, i))
 
     # Add detection to list of detected objects
-    detectedObject = DetectedObject()
-    detectedObject.label = label
-    detectedObject.cloud = pcl_to_ros(clusters_cloud)
-    detected_objects.append(detectedObject)
+    detected_objects.append(make_detectedObject(label, cluster_msg))
  
   # Convert pcl data to ros messages
   objects_msg = pcl_to_ros(objects_cloud)
@@ -243,52 +342,53 @@ def pcl_callback(pcl_msg):
   rospy.loginfo('Detected {} objects: {}'.format(len(detected_objects_labels), detected_objects_labels))
   detected_objects_publisher.publish(detected_objects)
 
-'''
   try:
-    pr2_mover(detected_objects_list)
+    pr2_mover(detected_objects)
   except rospy.ROSInterruptException:
     pass
-'''
 
 
-'''
 # function to load parameters and request PickPlace service
 def pr2_mover(object_list):
 
-    # TODO: Initialize variables
+  test_scene = Int32()
+  test_scene.data = CURRENT_TEST_SCENE
+  output = []
 
-    # TODO: Get/Read parameters
+  # Get information from the YAML files
+  pick_list = rospy.get_param('/object_list')
+  dropbox_list = rospy.get_param('/dropbox')
 
-    # TODO: Parse parameters into individual variables
+  for object in object_list:
 
-    # TODO: Rotate PR2 in place to capture side tables for the collision map
+    # Instatiate an object with its label and centroid position
+    pickPlaceObj = PickPlaceObject(object)
 
-    # TODO: Loop through the pick list
+    # Set where it will be placed based on information on the pick_list and dropbox_list
+    pickPlaceObj.set_place(pick_list, dropbox_list)
 
-        # TODO: Get the PointCloud for a given object and obtain it's centroid
+    # Make a yaml dictionary given current test scene and all available information
+    pickPlaceObj.make_yaml_dict(test_scene)
 
-        # TODO: Create 'place_pose' for the object
+    # Add this to our output
+    output.append(pickPlaceObj.yaml_dict)
+  
+    rospy.wait_for_service('pick_place_routine')
+ 
+    try:
+      pick_place_routine = rospy.ServiceProxy('pick_place_routine', PickPlace)
+      response = pick_place_routine(test_scene, 
+                                    pickPlaceObj.name, 
+                                    pickPlaceObj.arm, 
+                                    pickPlaceObj.pick_pose, 
+                                    pickPlaceObj.place_pose)
+      print "Response: ", response.success
 
-        # TODO: Assign the arm to be used for pick_place
-
-        # TODO: Create a list of dictionaries (made with make_yaml_dict()) for later output to yaml format
-
-        # Wait for 'pick_place_routine' service to come up
-        rospy.wait_for_service('pick_place_routine')
-
-        try:
-            pick_place_routine = rospy.ServiceProxy('pick_place_routine', PickPlace)
-
-            # TODO: Insert your message variables to be sent as a service request
-            resp = pick_place_routine(TEST_SCENE_NUM, OBJECT_NAME, WHICH_ARM, PICK_POSE, PLACE_POSE)
-
-            print ("Response: ",resp.success)
-
-        except rospy.ServiceException, e:
-            print "Service call failed: %s"%e
-
-    # TODO: Output your request parameters into output yaml file
-'''
+    except rospy.ServiceException, e:
+      print "Service call failed: %s" %e
+ 
+  # Finally create an output yaml file
+  send_to_yaml(OUTPUT_FILENAME, output)
 
 
 if __name__ == '__main__':
@@ -307,7 +407,7 @@ if __name__ == '__main__':
   detected_objects_publisher = rospy.Publisher("/detected_objects", DetectedObjectsArray, queue_size = 1)
   
   # Load Model From disk
-  model = pickle.load(open('model.sav', 'rb'))
+  model = pickle.load(open(MODEL_PATH, 'rb'))
   classifier = model['classifier']
   encoder = LabelEncoder()
   encoder.classes_ = model['classes']
