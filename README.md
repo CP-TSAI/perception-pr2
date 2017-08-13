@@ -27,4 +27,5 @@ This is my submission as partial fulfillment of [Udacity's Robotics Nanodegree](
 - Install missing dependencies
 ```
 $ cd ~/catkin_ws
-$ rosdep
+$ rosdep install --from-paths src --ignore-src --rosdistro=kinetic -y
+```
