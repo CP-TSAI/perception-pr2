@@ -34,3 +34,18 @@ Here are some  articles which use neural networks instead of SVM:
 $ cd ~/catkin_ws
 $ rosdep install --from-paths src --ignore-src --rosdistro=kinetic -y
 ```
+- Run the command `catkin_make`
+
+# How to use
+- Open the pick place launch file in `src/RoboND-Perception-Project/pr2_robot/launch/pick_place_project.launch`
+- Change the number `2` to either `1`, `2`, or `3`
+```
+<!--TODO:Change the world name to load different tabletop setup-->
+<arg name="world_name" value="$(find pr2_robot)/worlds/test2.world"/>
+<!--TODO:Change the list name based on the scene you have loaded-->
+<rosparam command="load" file="$(find pr2_robot)/config/pick_list_2.yaml"/>  
+```
+- Run this on one terminal `$ roslaunch pr2_robot pick_place_project.launch`
+- On another terminal, run `$ rosrun pr2_robot project.py`
+
+![screen](https://github.com/mithi/perception-pr2/blob/master/img/reach_test_2.png)
