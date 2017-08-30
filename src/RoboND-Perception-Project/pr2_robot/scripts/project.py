@@ -70,7 +70,7 @@ def do_voxel_grid_filter(point_cloud, LEAF_SIZE = 0.01):
 ''' Returns only the point cloud information at a specific range of a specific axis '''
 def do_passthrough_filter(point_cloud, name_axis = 'z', min_axis = 0.6, max_axis = 1.1):
   pass_filter = point_cloud.make_passthrough_filter()
-  pass_filter.set_filter_field_name(name_axis);
+  pass_filter.set_filter_field_name(name_axis)
   pass_filter.set_filter_limits(min_axis, max_axis)
   return pass_filter.filter()
 
@@ -395,7 +395,7 @@ def pr2_mover(object_list):
     except rospy.ServiceException, e:
       print "Service call failed: %s" %e
  
-  # Finally create an output yaml file
+  # Create an output yaml file
   send_to_yaml(OUTPUT_FILENAME, output)
 
 
@@ -414,7 +414,7 @@ if __name__ == '__main__':
   object_markers_publisher = rospy.Publisher("/object_markers", Marker, queue_size = 1)
   detected_objects_publisher = rospy.Publisher("/detected_objects", DetectedObjectsArray, queue_size = 1)
   
-  # Load Model From disk
+  # Load the model from disk
   model = pickle.load(open(MODEL_PATH, 'rb'))
   classifier = model['classifier']
   encoder = LabelEncoder()
