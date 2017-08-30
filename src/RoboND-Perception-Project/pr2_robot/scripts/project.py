@@ -25,6 +25,7 @@ import yaml
 
 import pcl
 
+
 CURRENT_TEST_SCENE = 2
 MODEL_PATH = '/home/mithi/catkin_ws/src/RoboND-Perception-Project/pr2_robot/scripts/model.sav'
 OUTPUT_FILENAME = "output_" + str(CURRENT_TEST_SCENE) + '.yaml'
@@ -57,7 +58,8 @@ def send_to_yaml(yaml_filename, dict_list):
 
   print "OUTPUT YAML CREATED:", yaml_filename
 
-''' Returns Downsampled version of a point cloud
+  
+''' Returns a downsampled version of a point cloud.
     The bigger the leaf size the less information retained '''
 def do_voxel_grid_filter(point_cloud, LEAF_SIZE = 0.01):
   voxel_filter = point_cloud.make_voxel_grid_filter()
@@ -83,7 +85,7 @@ def do_ransac_plane_segmentation(point_cloud, max_distance = 0.01):
   segmenter.set_method_type(pcl.SAC_RANSAC)
   segmenter.set_distance_threshold(max_distance)
 
-  # obtain inlier indices and model coefficients
+  # Obtain inlier indices and coefficients of the plane model / equation
   inlier_indices, coefficients = segmenter.segment()
 
   inliers = point_cloud.extract(inlier_indices, negative = False)
@@ -92,6 +94,7 @@ def do_ransac_plane_segmentation(point_cloud, max_distance = 0.01):
   return inliers, outliers
 
 
+'''Filters out points considered as noise or statisical outliers'''
 def filter_statistical_outliers(point_cloud, mean = 50, stdev = 0.5):
   outlier_filter = point_cloud.make_statistical_outlier_filter()
   outlier_filter.set_mean_k(mean)
@@ -99,7 +102,7 @@ def filter_statistical_outliers(point_cloud, mean = 50, stdev = 0.5):
   return outlier_filter.filter()
 
 
-''' This pipeline performs three pass through filter in each cartesian axis '''
+''' This pipeline performs three pass-through filters, one in each cartesian axis '''
 def get_region_of_interest(cloud):
 
   filtered_cloud_z = do_passthrough_filter(point_cloud = cloud, 
@@ -114,7 +117,7 @@ def get_region_of_interest(cloud):
   return filtered_cloud_zxy
 
 
-''' This pipeline separates the objects in the table from the given scene '''
+''' This pipeline separates the objects on the table from the given scene '''
 def split_cloud(cloud):
   
   # Reduce noise by taking out statistical outliers
@@ -132,10 +135,9 @@ def split_cloud(cloud):
   return objects_cloud, table_cloud
 
 
-''' This pipeline returns groups of indices for each cluster of points
-    Each cluster of indices is grouped as belonging to the same object
-    This uses DBSCAN Algorithm Density-Based Spatial Clustering of Applications with noise 
-    Aka Euclidian clustering to group points '''
+''' This pipeline returns groups of indices for each cluster of points.
+    Each cluster of indices is grouped as belonging to the same object.
+    To group points, DBSCAN Algorithm is used '''
 def get_clusters(cloud, tolerance, min_size, max_size):
 
   tree = cloud.make_kdtree()
@@ -152,7 +154,7 @@ def get_clusters(cloud, tolerance, min_size, max_size):
   return clusters
   
 
-''' clusters is a list of lists each list containing indices of the cloud
+''' Clusters is a list of lists. Each list containing indices of the cloud
     cloud is an array with each cell having three numbers corresponding to x, y, z position
     Returns list of [x, y, z, color] '''
 def get_colored_clusters(clusters, cloud):
@@ -181,7 +183,7 @@ def classify_cluster(cluster_msg):
   normal_hist = compute_normal_histograms(get_normals(cluster_msg))
   features = np.concatenate((color_hist, normal_hist))    
     
-  # Predict and get label
+  # Predict and get the corresponding label
   prediction = classifier.predict(scaler.transform(features.reshape(1, -1)))
   label = encoder.inverse_transform(prediction)[0]
 
@@ -196,7 +198,8 @@ def make_detectedObject(label, cluster_msg):
   detectedObject.cloud = cluster_msg
 
   return detectedObject
-  
+
+
 ''' This class holds information about the object in the scene and what to do with it '''
 class PickPlaceObject:
 
@@ -268,16 +271,16 @@ class PickPlaceObject:
         self.arm.data = box['name']
         break
 
-    print "arm:", self.arm.data
+    print "ARM:", self.arm.data
     print "To be placed at:"
     print self.place_pose.position
 
   def make_yaml_dict(self, test_scene):
     self.yaml_dict = make_yaml_dict(test_scene, self.arm, self.name, self.pick_pose, self.place_pose)
-    print "yaml dictionary created"
+    print "Yaml dictionary created"
 
 
-''' Callback function for your Point Cloud Subscriber '''
+''' Callback function for my Point Cloud Subscriber '''
 def pcl_callback(pcl_msg):
 
   # Convert ROS msg to PCL data
@@ -327,7 +330,11 @@ def pcl_callback(pcl_msg):
 
     # Add detection to list of detected objects
     detected_objects.append(make_detectedObject(label, cluster_msg))
- 
+
+  # ---------------------------
+  # PUBLISH DETECTED OBJECTS AND REQUEST FOR PICK AND PLACE 
+  # ---------------------------
+
   # Convert pcl data to ros messages
   objects_msg = pcl_to_ros(objects_cloud)
   table_msg = pcl_to_ros(table_cloud)
@@ -339,7 +346,8 @@ def pcl_callback(pcl_msg):
   clusters_publisher.publish(clusters_msg)
 
   # Publish the list of detected objects
-  rospy.loginfo('Detected {} objects: {}'.format(len(detected_objects_labels), detected_objects_labels))
+  number_of_detected_objects = len(detected_objects_labels)
+  rospy.loginfo('Detected {} objects: {}'.format(number_of_detected_objects, detected_objects_labels))
   detected_objects_publisher.publish(detected_objects)
 
   try:
@@ -348,7 +356,7 @@ def pcl_callback(pcl_msg):
     pass
 
 
-# function to load parameters and request PickPlace service
+# Function to load parameters and request PickPlace service
 def pr2_mover(object_list):
 
   test_scene = Int32()
