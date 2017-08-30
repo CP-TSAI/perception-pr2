@@ -4,10 +4,10 @@
 - There are eight types of objects: biscuits, soap, soap2, book, glue, sticky notes, snacks, and eraser. 
 - To train the model, 
 [**THIS SCRIPT**](https://github.com/mithi/perception-pr2/blob/master/src/sensor_stick/scripts/capture_features.py)
-spawns each object in random **100 orientations** and computes features based on the point clouds 
+spawns each object in **100 random orientations** and computes features based on the point clouds 
 resulting from each of the random orientations.
 - The features are normalized histograms of the color and normal 3d vectors for each point in the point cloud
-captured by the virtual RGBD camera. The color is expressed in **HSV** format, because they capture the true color better
+captured by the virtual RGBD camera. The color is expressed in **HSV** format, because they capture the true color better,
 regardless of lighting conditions. The normal vectors for each point capture the shape of object. I used **64 bins**
 for the histograms. They are normalized because it's the amount with respect to each other that matters not the actual amount. 
 You can inspect the 
@@ -48,13 +48,12 @@ def split_cloud(cloud):
  What this means is that all points who have a distance larger than `0.5` standard deviation of the mean distance to the 
  query point will be marked as outliers and removed.
 - After this, I downsample the resulting point cloud using a **voxel grid filter**.
-The bigger the leaf size the less information is retained. As explained by udacity, a voxel grid filter allows you to
-downsample the data by taking a spatial average of the points in the cloud confined by each voxel. 
+The bigger the leaf size the less information is retained. As explained by Udacity's lectures, a voxel grid filter allows you to downsample the data by taking a spatial average of the points in the cloud confined by each voxel. 
 You can adjust the sampling size by setting the voxel size along each dimension. 
 The set of points which lie within the bounds of a voxel are assigned to that voxel and
 statistically combined into one output point.
-- After this, I get only the information in our region of interest by performing a passthrough filter in all three axes. 
-The Pass Through Filter allows you to crop any given 3D point cloud by specifying an axis with cut-off values along that axis. 
+- After this, I get only the information in our region of interest by performing a **pass-through filter** in all three axes. 
+The pass-through filter allows you to crop any given 3D point cloud by specifying an axis with cut-off values along that axis. 
 ```python
 ''' This pipeline performs three pass through filter in each cartesian axis '''
 def get_region_of_interest(cloud):
@@ -73,12 +72,12 @@ def get_region_of_interest(cloud):
 - Lastly, to separate the table from the objects at the table top I use an algorithm called **RANSAC** or 
 **RANDOM SAMPLE CONSENSUS**. This algorithm identify points in your dataset that belong to a particular model.
 You can learn more about RANSAC here: https://www.youtube.com/watch?v=1YNjMxxXO-E
-The max distance I used is 0.01 which is the distance threshold from away from the ideal perfect 
+The max distance I used is 0.01. This is the distance threshold from away from the ideal perfect 
 plane model which I still consider as part of the model.
 
 ## Cluster
 ![clusters](https://github.com/mithi/perception-pr2/blob/master/img/clusters.png)
--  To identify which points in a point cloud belong to the same object, I used **DBSCAN  Algorithm** (Density-Based Spatial Clustering of Applications with noise) 
+-  To identify which points in a point cloud belong to the same object, I used the **DBSCAN  Algorithm** (Density-Based Spatial Clustering of Applications with noise) 
     aka Euclidian clustering to group points. 
     The idea is that if a particular point belongs to a cluster, it should be near to lots of other points in that cluster.
     The settings I used is largely based on trial and error.
@@ -109,8 +108,8 @@ plane model which I still consider as part of the model.
 
 # Reflections and Future Work
 - My pipeline won't work in a lot of scenarios. Here are a few that comes into mind:
-- If the point cloud data is more noisy
-- RGBD camera is placed differently then the region of interest will be different. 
-- If the objects to be recognized are not part of the classifier then naturally they won't be recognized. 
-- I haven't tried to do the challenge, this is only the minimum required to pass. In the future if I have time, I can 
+- - If the point cloud data is more noisy.
+- - If the RGBD camera is placed differently then the region of interest will be different. 
+- - If the objects to be recognized are not part of the classifier, then naturally they won't be recognized. 
+- - I haven't tried to do the challenge, this is only the minimum required to pass. In the future if I have time, I can 
 try making a pipeline for a more complex table top configuration.
